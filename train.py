@@ -2,10 +2,7 @@ import numpy as np
 import pennylane as qml
 
 # dataset Bars and Stripes
-dataset = qml.data.load("bars-and-stripes", n=4)[0]
-
-
-
+[dataset] = qml.data.load("other", name="bars-and-stripes")
 
 
 def sigmoid(x : float):
@@ -31,11 +28,6 @@ def sample_ber(p : float):
     else:
         return 0
 
-
-
-
-
-
 def bgs(w, eta, theta, nstep=10):
     """ Applique l'algorithme Block Gibbs Sampling pour l'echantillonage. """
     v = np.random.randint(0, 1, size=Nv)
@@ -59,6 +51,32 @@ def bgs(w, eta, theta, nstep=10):
             couche_v[i] = sample_ber(proba_v_sachant_h[i])
 
     return couche_h, couche_v
+
+
+def estim_emp(v, h):
+    """ Calcule l'estimation emprique de (v, h) ~ P rbm """
+    Nv = len(v)
+    Nh = len(h)
+    res = 0 
+    for i in range(Nv):
+        for a in range(Nh):
+            res += v[i] *  h[a]
+
+    return 1/(Nh*Nv) * res 
+
+def esperance_data(array_inputs):
+    """ Calcule l'espérance du jeu de données.  
+        parametres : tableau des inputs du dataset"""
+    N = inputs_np.shape[0]  
+    D = inputs_np.shape[1]
+    res = 0 
+    for i in range(N):
+        for j in range(D):
+            res += array_inputs[i][j]
+
+    return 1/(N*D) * res 
+
+
 
 
 if __name__ == "__main__":
@@ -92,16 +110,28 @@ if __name__ == "__main__":
     print(f"Couche h : {couche_h}")
     print(f"Couche v : {couche_v}")
 
-    # 2. Calcul gradient
-    esp_h = np.mean(couche_h)
-    esp_v = np.mean(couche_v)
+    # 2. Calcul de la partie négative du gradient (estimation empirique)
+    esperance_rbm  = estim_emp(couche_v, couche_h)
+    print(f"Estimation empirique: {esperance_rbm}" )
 
-    print(esp_h)
-    print(esp_v)
+    # 3. Calcul de la partie positive du gradient (Esperance de la proba du dataset)
+    
+    inputs = dataset.train['4']['inputs'] # vector representations of 4x4 pixel images
+    labels = dataset.train['4']['labels'] # labels for the above images
+    
+    # dimensions de inputs:  (N, D) 
+    inputs_np = np.array(inputs)
+    print(inputs_np.shape) 
+    nb_samples = inputs_np.shape[0]  
+    nb_pixels = inputs_np.shape[1]
 
-    # dataset 
-    images = dataset.data
-    labels = dataset.labels
+    esperance_data = esperance_data(inputs_np)
+    print(f"Esperance des valeurs du dataset Bars and Stripes : {esperance_data}")
+
+    # 4. Calcul de gradient (eta, theta, sigma): 
+    
+
+
 
 
 
