@@ -51,20 +51,98 @@ def bgs(w, eta, theta, nstep=10):
 
 
 def estim_emp(v, h):
-    """ Calcule l'estimation emprique de (v, h) ~ P rbm """
+    """ Calcule l'estimation emprique de (v, h) ~ P rbm """ 
+
+    # v_Nv ^ (1) pour 1 sample
+    # v_Nv ^ (15)
+    # v.shape = (15, Nv)
+
+    # h_Nh ^ (1) pour 1 sample
+    # h_Nh ^ (15)
+    # h.shape = (15, Nh)
+
+    # c'est juste Nv qui nest pas forcement = a Nh
+    # mais nb sample = entre eux 
+
     Nv = len(v)
     Nh = len(h)
-    res = 0 
-    for i in range(Nv):
-        for a in range(Nh):
-            res += v[i] *  h[a]
+    Ns = 1 # nb samples 
+    res = np.zeros((Nv, Nh))
 
-    return 1/(Nh*Nv) * res 
+    X_res = np.zeros(Ns)
 
-def estim_emp_vecteur(vec):
-    """ Calcule l'estimation emprique de vec ~ P rbm """
-    N = len(vec)
+    #   X_res += X^(k) 
+    for k in range(Ns):
+
+        for i in range(Nv):
+            for a in range(Nh):
+                res[i][a] = v[i] * h[a]
+
+        X_res[k] += res 
+
+
+    # 1/Ns sum_k X^(k)
+
+    return 1/Ns * res 
+
+
+
+def estim_emp_vecteur(mat_v, Ns):
+    """ 
+    Calcule l'estimation emprique de vec ~ P rbm 
+    mat_v : (Nvec, Ns)                                             (changer pour que ce soit Ns, Nvec)
+    """
+    Nvec = mat_v.shape[0] # nb de composante 
+    X = np.zeros(Nvec)
+
+    for i in range(Nvec): # pour chaque composante 
+
+        sum_vi = 0 # la somme des v_i 
+
+        for k in range(Ns): # on passe sur chaque echantillon pour cette composante 
+            sum_vi += mat_v[i][k]
+
+        X[i] = sum_vi 
+
+    return 1/Ns * X # moyenner toutes les composantes 
+
+
+
+def estim_emp_v_h(mat_v, mat_h, Ns):
+    """ 
+    Calcule l'estimation emprique de (v, h) ~ P rbm 
+    mat_v : (Ns, Nvec_v)
+    mat_h : (Ns, Nvec_h)
+    """
+    Nvec_v = mat_v.shape[1] # nb de composante  de v
+    Nvec_h = mat_h.shape[1] # nb de composante  de h
+
+    X = np.zeros((Nvec_v, Nvec_h)) 
+    matrices_des_k = np.zeros((Ns, Nvec_v, Nvec_h))
+
+    for k in range(Ns): # pour chaque echantillon
+
+        matrice_k = np.zeros((Nvec_v, Nvec_h)) # on a une matrice temporaire k
+
+        for i in range(Nvec_v):
+            for a in range(Nvec_h):
+                matrice_k[i][a] = mat_v[k][i] * mat_h[k][a] # ses composantes = v_i^(k) * h_a^(k)
+
+        matrices_des_k[k] = matrice_k # on va stocker ttes ces matrices k, dans une grosse matrice 
+
+
+    for i in range(Nvec_v):
+        for a in range(Nvec_h):
+            sum_k = 0
+            for k in range(Ns):
+                # on parcourt toutes les k matrices stockees pour calculer la somme de leurs 
+                # composantes, autrement dit on somme sur les k : v_i^(k) * h_a^(k) pour tout (i, a)
+                sum_k += matrices_des_k[k][i][a]
+
+            X[i][a] = sum_k
     
+    return 1/Ns * X # moyenner le tout  
+
 
 def esperance_data(array_inputs):
     """ Calcule l'espérance du jeu de données.  
@@ -83,8 +161,7 @@ def gradient_param(v, h):
     grad_w  = estim_emp(v, h)
     grad_theta = np.mean(v) - np.mean()
     grad_eta = np.mean(v) - np.mean()
-
-
+    
 
 
 if __name__ == "__main__":
