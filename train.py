@@ -1,9 +1,6 @@
 import numpy as np
 import pennylane as qml
 
-# dataset Bars and Stripes
-[dataset] = qml.data.load("other", name="bars-and-stripes")
-
 
 def sigmoid(x : float):
     return 1 / (1 + np.exp(-x))
@@ -64,6 +61,11 @@ def estim_emp(v, h):
 
     return 1/(Nh*Nv) * res 
 
+def estim_emp_vecteur(vec):
+    """ Calcule l'estimation emprique de vec ~ P rbm """
+    N = len(vec)
+    
+
 def esperance_data(array_inputs):
     """ Calcule l'espérance du jeu de données.  
         parametres : tableau des inputs du dataset"""
@@ -75,6 +77,12 @@ def esperance_data(array_inputs):
             res += array_inputs[i][j]
 
     return 1/(N*D) * res 
+
+def gradient_param(v, h):
+    """ Calcule les gradients des parametres w, eta, theta """
+    grad_w  = estim_emp(v, h)
+    grad_theta = np.mean(v) - np.mean()
+    grad_eta = np.mean(v) - np.mean()
 
 
 
@@ -105,7 +113,7 @@ if __name__ == "__main__":
     theta = np.zeros(Nv)
     
     # 1. Sample nodes
-    (couche_h, couche_v) = bgs(w=w, eta=eta, theta=theta)  #  ~ RBM
+    (couche_h, couche_v) = bgs(w=w, eta=eta, theta=theta)  # ~ RBM
 
     print(f"Couche h : {couche_h}")
     print(f"Couche v : {couche_v}")
@@ -115,21 +123,22 @@ if __name__ == "__main__":
     print(f"Estimation empirique: {esperance_rbm}" )
 
     # 3. Calcul de la partie positive du gradient (Esperance de la proba du dataset)
-    
+    [dataset] = qml.data.load("other", name="bars-and-stripes") # dataset Bars and Stripes
+
     inputs = dataset.train['4']['inputs'] # vector representations of 4x4 pixel images
     labels = dataset.train['4']['labels'] # labels for the above images
     
-    # dimensions de inputs:  (N, D) 
+    # Dimensions de inputs: (N, D) 
     inputs_np = np.array(inputs)
     print(inputs_np.shape) 
-    nb_samples = inputs_np.shape[0]  
-    nb_pixels = inputs_np.shape[1]
+    nb_samples = inputs_np.shape[0] # N
+    nb_pixels = inputs_np.shape[1]  # D
 
     esperance_data = esperance_data(inputs_np)
     print(f"Esperance des valeurs du dataset Bars and Stripes : {esperance_data}")
 
-    # 4. Calcul de gradient (eta, theta, sigma): 
-    
+    # 4. Calcul des gradients de w, eta, theta 
+    (grad_w, grad_eta, grad_theta) = gradient_param()
 
 
 
