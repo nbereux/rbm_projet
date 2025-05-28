@@ -24,7 +24,7 @@ def sample_ber(p : float):
 
 def bgs(w, eta, theta, nstep=10):
     """ Applique l'algorithme Block Gibbs Sampling pour l'echantillonage. """
-    v = np.random.randint(0, 1, size=Nv)
+    v = np.random.randint(0, 1, size=Nv) # initialisation 
     h = np.random.randint(0, 1, size=Nh)
 
     for n in range(nstep):
@@ -104,6 +104,7 @@ def estim_empirique_univariee(mat_v, Ns):
     return 1/Ns * X # moyenner toutes les composantes 
 
 
+
 def estim_empirique_bivariee(mat_v, mat_h, Ns):
     """ 
     Calcule l'estimation emprique de (v, h) ~ P rbm 
@@ -139,9 +140,10 @@ def estim_empirique_bivariee(mat_v, mat_h, Ns):
     return 1/Ns * X # moyenner le tout  
 
 
-def esperance_data(array_inputs):
+def esperance_data(array_inputs): 
     """ Calcule l'espérance du jeu de données.  
-        parametres : tableau des inputs du dataset"""
+        parametres : tableau des inputs du dataset
+        Calcul de la proba des cachés (h) sachant les visibles (données) """
     N = inputs_np.shape[0]  
     D = inputs_np.shape[1]
     res = 0 
@@ -153,12 +155,21 @@ def esperance_data(array_inputs):
     
 
 def calcul_gradients(mat_v, mat_h, Ns, inputs_data):
-    """ Calcule les gradients des parametres w, eta, theta """ 
-    grad_w     = esperance_data(inputs_data) - estim_empirique_bivariee(mat_v, mat_h, Ns)  # <viha>_D - <viha>_RBM
-    grad_theta = np.mean(mat_v) - estim_empirique_univariee(mat_v, Ns)                     # <vi>_D - <vi>_RBM
-    grad_eta   = np.mean(mat_h) - estim_empirique_univariee(mat_h, Ns)                     # <ha>_D - <ha>_RBM
+    """ Calcule les gradients des parametres w, eta, theta 
+        retour : (3 vecteurs de gradients)
+        inputs_data: matrice de données (visibles) : (Ns, Nf)
+        mat_h_sachant_data:  (Ns, Nh)
+        
 
-    return (grad_w, grad_theta, grad_eta)
+        
+        univariee -- > moy empirique (moyenne sur toutes les colonnes axis 0)
+        bivariée -- > moy empirique d'une fonction  """ 
+    proba_h_sachant_data = sigmoid(eta + inputs_data@w) 
+    grad_w     = estim_empirique_bivariee(inputs_data, proba_h_sachant_data, Ns) - estim_empirique_bivariee(mat_v, mat_h, Ns)  # <viha>_D - <viha>_RBM
+    grad_theta = estim_empirique_univariee(inputs_data, Ns) - estim_empirique_univariee(mat_v, Ns)                     # <vi>_D - <vi>_RBM 
+    grad_eta   = estim_empirique_univariee(proba_h_sachant_data, Ns) - estim_empirique_univariee(mat_h, Ns)                     # <ha>_D - <ha>_RBM
+
+    return (grad_w, grad_theta, grad_eta)  
 
 
 def descente_gradient_rbm(h, v, Ns, w0, eta0, theta0, nstep=10, mu):
@@ -237,8 +248,8 @@ if __name__ == "__main__":
     # Dimensions de inputs: (N, D) 
     inputs_np = np.array(inputs)
     print(inputs_np.shape) 
-    nb_samples = inputs_np.shape[0] # N 
-    nb_pixels = inputs_np.shape[1]  # D
+    nb_samples = inputs_np.shape[0] # N --> samples
+    nb_pixels = inputs_np.shape[1]  # D ---> features
 
     esperance_data = esperance_data(inputs_np)
     print(f"Esperance des valeurs du dataset Bars and Stripes : {esperance_data}")
