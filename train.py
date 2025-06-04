@@ -1,9 +1,37 @@
 import numpy as np
 import pennylane as qml
+from itertools import product
 
 
-def sigmoid(x : float):
+def sigmoid(x):
+    """ Calcule et evalue la fonction sigmoid au point x. """ 
     return 1 / (1 + np.exp(-x))
+
+
+def Z(v, h, w, theta, eta):
+    """ Calcule le denominateur de l'expression de la log-vraisemblance
+        la somme sur toutes les possibilités de v,h (dans notre cas {0,1})
+        renvoie un vecteur de taille Nv + Nh  """
+    Nv = len(v)
+    Nh = len(h)
+    
+    combinaisons = list(product([0, 1], repeat=(Nv + Nh))) # combinaisons possibles de 0 et 1 dans un tuple de longueur 5 
+    res = 0 # somme de ttes les config possibles 
+
+    for vec in combinaisons:
+        v = vec[0  : Nv] # les Nv premiers elt. 
+        h = vec[Nv :   ] # le reste des elt., donc les Nh derniers elements 
+
+        res += H(v, h, w, theta, eta) # H prend en entrée une configuration possible
+
+    return res
+
+
+
+def log_likelihood(v, h, w, theta, eta):
+    """ Calcule la log-vraisemblance selon la fonction de masse d'une RBM.
+        renvoie un vecteur de taille Nh + Nv """
+    return 1/Z(v, h) * np.exp(H(v, h, w, theta, eta))
 
 
 def H(v, h, w, theta, eta):
@@ -157,6 +185,10 @@ def descente_gradient_rbm(h, v, inputs_data, Ns, w0, eta0, theta0, mu, nstep=10)
         w = w + mu * grad_w
         eta = eta + mu * grad_eta
         theta = theta + mu * grad_theta
+
+        log_llh = log_likelihood(v, h, w, theta, eta)
+        print(log_llh)
+
         
     return w, eta, theta
 
@@ -202,3 +234,7 @@ if __name__ == "__main__":
 
     # Calcul des biais (eta & theta) et de la matrice des poids (w) 
     w, eta, theta = descente_gradient_rbm(h=couche_h, v=couche_v, Ns=nb_samples, inputs_data=inputs_np, w0=w, eta0=eta, theta0=theta, mu=mu, nstep=10)
+
+    print(w)
+    print(eta)
+    print(theta)
