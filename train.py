@@ -1,7 +1,8 @@
+import h5py 
 import numpy as np
 import pennylane as qml
 from itertools import product
-
+from pathlib import Path
 
 def sigmoid(x):
     """ Calcule et evalue la fonction sigmoid au point x. """ 
@@ -27,11 +28,10 @@ def Z(v, h, w, theta, eta):
     return res
 
 
-
 def log_likelihood(v, h, w, theta, eta):
     """ Calcule la log-vraisemblance selon la fonction de masse d'une RBM.
         renvoie un vecteur de taille Nh + Nv """
-    return 1/Z(v, h) * np.exp(H(v, h, w, theta, eta))
+    return 1/Z(v, h, w, theta, eta) * np.exp(H(v, h, w, theta, eta))
 
 
 def H(v, h, w, theta, eta):
@@ -52,7 +52,7 @@ def sample_ber(p : float):
         return 0
 
 
-def bgs(w, eta, theta, nstep=10):
+def bgs(w, eta, theta, Nv, Nh, nstep=10):
     """ Applique l'algorithme Block Gibbs Sampling pour l'echantillonage. """
     v = np.random.randint(0, 1, size=Nv) # initialisation 
     h = np.random.randint(0, 1, size=Nh)
@@ -218,7 +218,7 @@ if __name__ == "__main__":
     mu = 0.025 # ???????????
     
     # Couches des noeuds cachés (h) et visibles (v)
-    couche_h, couche_v = bgs(w=w, eta=eta, theta=theta)  # ~ RBM
+    couche_h, couche_v = bgs(w=w, eta=eta, theta=theta, Nv=Nv, Nh=Nh)  # ~ RBM
 
     print(f"Couche h : {couche_h}")
     print(f"Couche v : {couche_v}")
@@ -226,7 +226,8 @@ if __name__ == "__main__":
     # Jeu de données Bars and Stripes: 
     [dataset] = qml.data.load("other", name="bars-and-stripes") 
     inputs = dataset.train['4']['inputs'] # images de pixels 4x4 
-    
+    print("Chemin cache du dataset :", Path(dataset.source))
+
     # Dimensions des inputs: (N, D) 
     inputs_np = np.array(inputs)
     nb_samples = inputs_np.shape[0] # N ---> samples
@@ -235,6 +236,7 @@ if __name__ == "__main__":
     # Calcul des biais (eta & theta) et de la matrice des poids (w) 
     w, eta, theta = descente_gradient_rbm(h=couche_h, v=couche_v, Ns=nb_samples, inputs_data=inputs_np, w0=w, eta0=eta, theta0=theta, mu=mu, nstep=10)
 
-    print(w)
-    print(eta)
-    print(theta)
+    with h5py.File("rbm_parameters.h5", "w") as f:
+        f["weight_matrix"] = w
+        f["eta_vector"]    = eta 
+        f["theta_vector"]  = theta 
