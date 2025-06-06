@@ -2,7 +2,8 @@ import h5py
 import numpy as np
 import pennylane as qml
 from itertools import product
-from pathlib import Path
+
+
 
 def sigmoid(x):
     """ Calcule et evalue la fonction sigmoid au point x. """ 
@@ -16,65 +17,49 @@ def Z(v, h, w, theta, eta):
     Nv = len(v)
     Nh = len(h)
     
-    combinaisons = list(product([0, 1], repeat=(Nv + Nh))) # combinaisons possibles de 0 et 1 dans un tuple de longueur 5 
-    res = 0 # somme de ttes les config possibles 
+    combinaisons = np.array(list(product([0, 1], repeat=(Nv + Nh)))) # combinaisons possibles de 0 et 1 dans un tuple de longueur 5 
+    
+    # res = 0 # somme de ttes les config possibles 
+    # for vec in combinaisons:
+    #     v = vec[0  : Nv] # les Nv premiers elt. 
+    #     h = vec[Nv :   ] # le reste des elt., donc les Nh derniers elements 
 
-    for vec in combinaisons:
-        v = vec[0  : Nv] # les Nv premiers elt. 
-        h = vec[Nv :   ] # le reste des elt., donc les Nh derniers elements 
+    #     res += np.exp(-H(v, h, w, theta, eta)) # H prend en entrée une configuration possible
 
-        res += H(v, h, w, theta, eta) # H prend en entrée une configuration possible
+    # return res
 
-    return res
+    parties_v = combinaisons[:, :Nv] # ttes les combinaisons en gardant que les Nv premiers elt. 
+    parties_h = combinaisons[:, Nv:] # idem pour les Nh derniers elt. 
+
+    # H prend en entrée une configuration possible
+    # on somme donc sur ttes les configurations possibles
+    return sum([np.exp(-H(v, h, w, theta, eta)) for v, h in zip(parties_v, parties_h)]) 
+
+
+def H(v, h, w, theta, eta):
+    """ Fonction d'energie du RBM """
+    # res = 0
+    # for i in range(Nv):
+    #     for a in range(Nh):
+    #         res += v[i] * w[i][a] * h[a]
+
+    # return -(res + v@theta + h@eta)
+    return -(v@w@h + v@theta + h@eta)
 
 
 def log_likelihood(v, h, w, theta, eta):
     """ Calcule la log-vraisemblance selon la fonction de masse d'une RBM.
         renvoie un vecteur de taille Nh + Nv """
-    return 1/Z(v, h, w, theta, eta) * np.exp(H(v, h, w, theta, eta))
+    return 1/Z(v, h, w, theta, eta) * np.exp(-H(v, h, w, theta, eta))
 
 
-def H(v, h, w, theta, eta):
-    """ Fonction d'energie du RBM """
-    res = 0
-    for i in range(Nv):
-        for a in range(Nh):
-            res += v[i] * w[i][a] * h[a]
-
-    return -(res + v@theta + h@eta)
-
-
-def sample_ber(p : float):
-    x = np.random.rand()
-    if x < p:
-        return 1 
-    else:
-        return 0
-
-
-def bgs(w, eta, theta, Nv, Nh, nstep=10):
-    """ Applique l'algorithme Block Gibbs Sampling pour l'echantillonage. """
-    v = np.random.randint(0, 1, size=Nv) # initialisation 
-    h = np.random.randint(0, 1, size=Nh)
-
-    for n in range(nstep):
-        # calculer p(h|v)
-        proba_h_sachant_v = sigmoid(eta + v@w)
-
-        # sample p(h|v) 
-        couche_h = np.ones(Nh, dtype=int)
-        for i in range(Nh):
-            couche_h[i] = sample_ber(proba_h_sachant_v[i])
-
-        # calculer p(v|h)
-        proba_v_sachant_h = sigmoid(theta + w@h)  
-
-        # sample p(v|h)
-        couche_v = np.ones(Nv, dtype=int)
-        for i in range(Nv):
-            couche_v[i] = sample_ber(proba_v_sachant_h[i])
-
-    return couche_h, couche_v
+def sample_ber(p):
+    # x = np.random.rand()
+    # if x < p:
+    #     return 1 
+    # else:
+    #     return 0
+    return (np.random.rand(*p.shape) < p).astype(int)
 
 
 def moyenne_empirique(mat_v, Ns):
@@ -158,13 +143,41 @@ def calcul_gradients(w, mat_v, mat_h, Ns, inputs_data):
     return grad_w, grad_eta, grad_theta
 
 
-def descente_gradient_rbm(h, v, inputs_data, Ns, w0, eta0, theta0, mu, nstep=10):
+def bgs(w, eta, theta, Nv, Nh, nstep=10):
+    """ Applique l'algorithme Block Gibbs Sampling pour l'echantillonage. """
+    v = np.random.randint(0, 1, size=Nv) # initialisation 
+    h = np.random.randint(0, 1, size=Nh)
+
+    for n in range(nstep):
+        # calculer p(h|v)
+        proba_h_sachant_v = sigmoid(eta + v@w)
+
+        # sample p(h|v) 
+
+        # couche_h = np.ones(Nh, dtype=int)
+        # for i in range(Nh):
+        #     couche_h[i] = sample_ber(proba_h_sachant_v[i])
+        couche_h = sample_ber(proba_h_sachant_v) # Taille Nh
+
+        # calculer p(v|h)
+        proba_v_sachant_h = sigmoid(theta + w@h)  
+
+        # sample p(v|h)
+
+        # couche_v = np.ones(Nv, dtype=int)
+        # for i in range(Nv):
+        #     couche_v[i] = sample_ber(proba_v_sachant_h[i])
+        couche_v = sample_ber(proba_v_sachant_h) # Taille Nv
+
+    return couche_h, couche_v
+
+
+def descente_gradient_rbm(h, v, inputs_data, Ns, w0, eta0, theta0, mu, nstep):
     """
     Met à jour les gradients des parametres w, eta, theta du modèle RBM 
     - params : 
         mu : taux d'apprentissage 
         Ns : nombre d'échantillons 
-    les valeurs initiales des parametres sont définies avant.
     """
     mat_h = np.zeros((Ns, len(h)))
     mat_v = np.zeros((Ns, len(v)))
@@ -176,7 +189,7 @@ def descente_gradient_rbm(h, v, inputs_data, Ns, w0, eta0, theta0, mu, nstep=10)
     for i in range(nstep):
         # 1ere etape : echantillonage
         for k in range(Ns):
-            mat_h[k], mat_v[k] = bgs(w, eta, theta, nstep) # ie. (couche_h, couche_v), a chaque fois nouveau
+            mat_h[k], mat_v[k] = bgs(w, eta, theta, len(v), len(h), nstep) # ie. (couche_h, couche_v), a chaque fois nouveau
 
         # 2eme etape : calcul gradient 
         grad_w, grad_eta, grad_theta = calcul_gradients(w, mat_v, mat_h, Ns, inputs_data)
@@ -186,10 +199,10 @@ def descente_gradient_rbm(h, v, inputs_data, Ns, w0, eta0, theta0, mu, nstep=10)
         eta = eta + mu * grad_eta
         theta = theta + mu * grad_theta
 
-        log_llh = log_likelihood(v, h, w, theta, eta)
-        print(log_llh)
+        # log_llh = log_likelihood(v, h, w, theta, eta)
+        # print(log_llh)
+        print(i)
 
-        
     return w, eta, theta
 
     
@@ -226,7 +239,6 @@ if __name__ == "__main__":
     # Jeu de données Bars and Stripes: 
     [dataset] = qml.data.load("other", name="bars-and-stripes") 
     inputs = dataset.train['4']['inputs'] # images de pixels 4x4 
-    print("Chemin cache du dataset :", Path(dataset.source))
 
     # Dimensions des inputs: (N, D) 
     inputs_np = np.array(inputs)
@@ -234,7 +246,7 @@ if __name__ == "__main__":
     nb_pixels  = inputs_np.shape[1] # D ---> features
 
     # Calcul des biais (eta & theta) et de la matrice des poids (w) 
-    w, eta, theta = descente_gradient_rbm(h=couche_h, v=couche_v, Ns=nb_samples, inputs_data=inputs_np, w0=w, eta0=eta, theta0=theta, mu=mu, nstep=10)
+    w, eta, theta = descente_gradient_rbm(h=couche_h, v=couche_v, Ns=nb_samples, inputs_data=inputs_np, w0=w, eta0=eta, theta0=theta, mu=mu, nstep=250)
 
     with h5py.File("rbm_parameters.h5", "w") as f:
         f["weight_matrix"] = w
