@@ -1,6 +1,8 @@
 import h5py 
 import numpy as np
 import pennylane as qml
+
+from tqdm import trange
 from itertools import product
 
 
@@ -154,7 +156,7 @@ def bgs(w, eta, theta, Nv, Nh, nstep=10):
     v = np.random.randint(0, 1, size=Nv) # initialisation 
     h = np.random.randint(0, 1, size=Nh)
 
-    for n in range(nstep):
+    for _ in range(nstep):
         # calculer p(h|v)
         proba_h_sachant_v = sigmoid(eta + v@w)
 
@@ -194,7 +196,7 @@ def descente_gradient_rbm(h, v, inputs_data, Ns, w0, eta0, theta0, mu, epochs):
 
     llh = np.zeros(epochs)
 
-    for i in range(epochs):
+    for i in trange(epochs, desc="Training RBM"):
         # 1ere etape : echantillonage
         for k in range(Ns):
             mat_h[k], mat_v[k] = bgs(w, eta, theta, len(v), len(h), epochs) # ie. (couche_h, couche_v), a chaque fois nouveau
@@ -208,7 +210,7 @@ def descente_gradient_rbm(h, v, inputs_data, Ns, w0, eta0, theta0, mu, epochs):
         theta = theta + mu * grad_theta
 
         llh[i] = log_likelihood(v, h, w, theta, eta)
-        print(i)
+
 
     return w, eta, theta, llh
 
