@@ -10,13 +10,11 @@ def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
 
-def Z(v, h, w, theta, eta):
+def Z(w, theta, eta):
     """ Calcule le denominateur de l'expression de la log-vraisemblance
         la somme sur toutes les possibilités de v,h (dans notre cas {0,1})
         renvoie un vecteur de taille Nv + Nh  """
-    Nv = len(v)
-    Nh = len(h)
-    
+    Nv, Nh = w.shape
     combinaisons = np.array(list(product([0, 1], repeat=(Nv + Nh)))) # combinaisons possibles de 0 et 1 dans un tuple de longueur 5 
     
     # res = 0 # somme de ttes les config possibles 
@@ -50,7 +48,7 @@ def H(v, h, w, theta, eta):
 def log_likelihood(v, h, w, theta, eta):
     """ Calcule la log-vraisemblance selon la fonction de masse d'une RBM.
         renvoie un vecteur de taille Nh + Nv """
-    return 1/Z(v, h, w, theta, eta) * np.exp(-H(v, h, w, theta, eta))
+    return 1/Z(w, theta, eta) * np.exp(-H(v, h, w, theta, eta))
 
 
 def sample_ber(p):
@@ -62,28 +60,30 @@ def sample_ber(p):
     return (np.random.rand(*p.shape) < p).astype(int)
 
 
-def moyenne_empirique(mat_v, Ns):
+def moyenne_empirique(mat_v):
     """ 
     Calcule l'estimation emprique de v ~ RBM
 
     - params: 
         mat_v : (Ns, Nvec)
+        Ns : number of samples 
     """
-    Nvec = mat_v.shape[1] # nb de composante 
-    X = np.zeros(Nvec)
+    # Ns, Nvec = mat_v.shape # nb de composante 
+    # X = np.zeros(Nvec)
 
-    for i in range(Nvec): # pour chaque composante 
-        sum_vi = 0 
+    # for i in range(Nvec): # pour chaque composante 
+    #     sum_vi = 0 
 
-        for k in range(Ns): # on passe sur chacun de ses echantillons  
-            sum_vi += mat_v[k][i]
+    #     for k in range(Ns): # on passe sur chacun de ses echantillons  
+    #         sum_vi += mat_v[k][i]
 
-        X[i] = sum_vi # Le i-eme elt. de X est la somme des v_i 
+    #     X[i] = sum_vi # Le i-eme elt. de X est la somme des v_i 
 
-    return 1/Ns * X # moyenner toutes les composantes 
+    # return 1/Ns * X # moyenner toutes les composantes 
+    return np.mean(mat_v, axis=0)
 
 
-def moyenne_empirique_fonction(mat_v, mat_h, Ns):
+def moyenne_empirique_fonction(mat_v, mat_h):
     """ 
     Calcule l'estimation emprique de (v, h) ~ RBM 
 
@@ -91,36 +91,42 @@ def moyenne_empirique_fonction(mat_v, mat_h, Ns):
         mat_v : (Ns, Nvec_v)
         mat_h : (Ns, Nvec_h)
     """
-    Nvec_v = mat_v.shape[1] # nb de composante de v
-    Nvec_h = mat_h.shape[1] # nb de composante de h
+    # Ns = mat_v.shape[0]
+    # Nvec_v = mat_v.shape[1] # nb de composante de v
+    # Nvec_h = mat_h.shape[1] # nb de composante de h
 
-    X = np.zeros((Nvec_v, Nvec_h)) 
-    matrices_des_k = np.zeros((Ns, Nvec_v, Nvec_h))
+    # X = np.zeros((Nvec_v, Nvec_h)) 
+    # matrices_des_k = np.zeros((Ns, Nvec_v, Nvec_h))
 
-    for k in range(Ns): # pour chaque echantillon
+    # for k in range(Ns): # pour chaque echantillon
 
-        matrice_k = np.zeros((Nvec_v, Nvec_h)) # on a une matrice temporaire k
+    #     matrice_k = np.zeros((Nvec_v, Nvec_h)) # on a une matrice temporaire k
 
-        for i in range(Nvec_v):
-            for a in range(Nvec_h):
-                matrice_k[i][a] = mat_v[k][i] * mat_h[k][a] # ses composantes = v_i^(k) * h_a^(k)
+    #     for i in range(Nvec_v):
+    #         for a in range(Nvec_h):
+    #             matrice_k[i][a] = mat_v[k][i] * mat_h[k][a] # ses composantes = v_i^(k) * h_a^(k)
 
-        matrices_des_k[k] = matrice_k # on va stocker ttes ces matrices k, dans une grosse matrice 
+    #     matrices_des_k[k] = matrice_k # on va stocker ttes ces matrices k, dans une grosse matrice 
 
-    for i in range(Nvec_v):
-        for a in range(Nvec_h):
-            sum_k = 0
-            for k in range(Ns):
-                # on parcourt toutes les k matrices stockees pour calculer la somme de leurs 
-                # composantes, autrement dit on somme sur les k : v_i^(k) * h_a^(k) pour tout (i, a)
-                sum_k += matrices_des_k[k][i][a]
+    # de dimension (Ns, Nv, Nh)
+    matrices_des_k = mat_v[:, :, None] * mat_h[:, None, :] # 'None', en slicing, cree un axe de longueur 1
 
-            X[i][a] = sum_k
+    # for i in range(Nvec_v):
+    #     for a in range(Nvec_h):
+    #         sum_k = 0
+    #         for k in range(Ns):
+    #             # on parcourt toutes les k matrices stockees pour calculer la somme de leurs 
+    #             # composantes, autrement dit on somme sur les k : v_i^(k) * h_a^(k) pour tout (i, a)
+    #             sum_k += matrices_des_k[k][i][a]
+
+    #         X[i][a] = sum_k
     
-    return 1/Ns * X # moyenner le tout  
+    # return 1/Ns * X # moyenner le tout  
+
+    return np.mean(matrices_des_k, axis=0) # on moyenne sur les Ns samples 
     
 
-def calcul_gradients(w, mat_v, mat_h, Ns, inputs_data):
+def calcul_gradients(w, mat_v, mat_h, inputs_data):
     """ 
     Calcule les gradients des parametres w, eta, theta 
     
@@ -136,9 +142,9 @@ def calcul_gradients(w, mat_v, mat_h, Ns, inputs_data):
     """ 
     proba_h_sachant_data = sigmoid(eta + inputs_data@w) 
 
-    grad_w     = moyenne_empirique_fonction(inputs_data, proba_h_sachant_data, Ns) - moyenne_empirique_fonction(mat_v, mat_h, Ns)  # <viha>_D - <viha>_RBM
-    grad_theta = moyenne_empirique(inputs_data, Ns)          - moyenne_empirique(mat_v, Ns)  # <vi>_D - <vi>_RBM 
-    grad_eta   = moyenne_empirique(proba_h_sachant_data, Ns) - moyenne_empirique(mat_h, Ns)  # <ha>_D - <ha>_RBM
+    grad_w     = moyenne_empirique_fonction(inputs_data, proba_h_sachant_data) - moyenne_empirique_fonction(mat_v, mat_h)  # <viha>_D - <viha>_RBM
+    grad_theta = moyenne_empirique(inputs_data)          - moyenne_empirique(mat_v)  # <vi>_D - <vi>_RBM 
+    grad_eta   = moyenne_empirique(proba_h_sachant_data) - moyenne_empirique(mat_h)  # <ha>_D - <ha>_RBM
 
     return grad_w, grad_eta, grad_theta
 
@@ -172,7 +178,7 @@ def bgs(w, eta, theta, Nv, Nh, nstep=10):
     return couche_h, couche_v
 
 
-def descente_gradient_rbm(h, v, inputs_data, Ns, w0, eta0, theta0, mu, nstep):
+def descente_gradient_rbm(h, v, inputs_data, Ns, w0, eta0, theta0, mu, epochs):
     """
     Met à jour les gradients des parametres w, eta, theta du modèle RBM 
     - params : 
@@ -186,24 +192,25 @@ def descente_gradient_rbm(h, v, inputs_data, Ns, w0, eta0, theta0, mu, nstep):
     eta = eta0
     theta = theta0
 
-    for i in range(nstep):
+    llh = np.zeros(epochs)
+
+    for i in range(epochs):
         # 1ere etape : echantillonage
         for k in range(Ns):
-            mat_h[k], mat_v[k] = bgs(w, eta, theta, len(v), len(h), nstep) # ie. (couche_h, couche_v), a chaque fois nouveau
+            mat_h[k], mat_v[k] = bgs(w, eta, theta, len(v), len(h), epochs) # ie. (couche_h, couche_v), a chaque fois nouveau
 
         # 2eme etape : calcul gradient 
-        grad_w, grad_eta, grad_theta = calcul_gradients(w, mat_v, mat_h, Ns, inputs_data)
+        grad_w, grad_eta, grad_theta = calcul_gradients(w, mat_v, mat_h, inputs_data)
 
         # 3eme etape : MAJ du gradient
         w = w + mu * grad_w
         eta = eta + mu * grad_eta
         theta = theta + mu * grad_theta
 
-        # log_llh = log_likelihood(v, h, w, theta, eta)
-        # print(log_llh)
+        llh[i] = log_likelihood(v, h, w, theta, eta)
         print(i)
 
-    return w, eta, theta
+    return w, eta, theta, llh
 
     
      
@@ -246,9 +253,10 @@ if __name__ == "__main__":
     nb_pixels  = inputs_np.shape[1] # D ---> features
 
     # Calcul des biais (eta & theta) et de la matrice des poids (w) 
-    w, eta, theta = descente_gradient_rbm(h=couche_h, v=couche_v, Ns=nb_samples, inputs_data=inputs_np, w0=w, eta0=eta, theta0=theta, mu=mu, nstep=250)
+    w, eta, theta, llh = descente_gradient_rbm(h=couche_h, v=couche_v, Ns=nb_samples, inputs_data=inputs_np, w0=w, eta0=eta, theta0=theta, mu=mu, epochs=100)
 
     with h5py.File("rbm_parameters.h5", "w") as f:
         f["weight_matrix"] = w
         f["eta_vector"]    = eta 
         f["theta_vector"]  = theta 
+        f["log_likelihoods"]  = llh 
