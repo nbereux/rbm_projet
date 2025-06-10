@@ -7,6 +7,43 @@ from itertools import product
 from scipy.special import logsumexp, log1p
 
 
+def generate_binary_code(bit_length, batch_size_exp=None, batch_number=0):
+    # No batch size is given, all data is returned
+    if batch_size_exp is None:
+        batch_size_exp = bit_length
+    batch_size = 2 ** batch_size_exp
+    # Generate batch
+    bit_combinations = np.zeros((batch_size, bit_length))
+    for number in range(batch_size):
+        dividend = number + batch_number * batch_size
+        bit_index = 0
+        while dividend != 0:
+            bit_combinations[number, bit_index] = np.remainder(dividend, 2)
+            dividend = np.floor_divide(dividend, 2)
+            bit_index += 1
+    return bit_combinations
+
+
+def generate_bars_and_stripes_complete(length):
+    """ Creates a dataset containing all possible samples showing bars or stripes.
+
+    :param length: Length of the bars/stripes.
+    :type length: int
+
+    :return: Samples.
+    :rtype: numpy array [num_samples, length*length]
+    """
+    stripes = generate_binary_code(length)
+    stripes = np.repeat(stripes, length, 0)
+    stripes = stripes.reshape(2 ** length, length * length)
+
+    bars = generate_binary_code(length)
+    bars = bars.reshape(2 ** length * length, 1)
+    bars = np.repeat(bars, length, 1)
+    bars = bars.reshape(2 ** length, length * length)
+    return np.vstack((stripes[0:stripes.shape[0]-1],bars[1:bars.shape[0]]))
+    # return numx.vstack((stripes, bars)) # Tests have to match if changed to this.
+
 
 def sigmoid(x):
     """ Calcule et evalue la fonction sigmoid au point x. """ 
@@ -138,7 +175,7 @@ def moyenne_empirique_fonction(mat_v, mat_h):
     return np.mean(matrices_des_k, axis=0) # on moyenne sur les Ns samples 
     
 
-def calcul_gradients(w, mat_v, mat_h, inputs_data):
+def calcul_gradients(w, mat_v, inputs_data):
     """ 
     Calcule les gradients des parametres w, eta, theta 
     
@@ -153,11 +190,11 @@ def calcul_gradients(w, mat_v, mat_h, inputs_data):
     bivariée  -- > moy empirique d'une fonction  
     """ 
     proba_h_sachant_data = sigmoid(eta + inputs_data@w) 
-    proba_h_sachant_v = 0 
+    proba_h_sachant_v    = sigmoid(eta + mat_v@w) 
 
-    grad_w     = moyenne_empirique_fonction(inputs_data, proba_h_sachant_data) - moyenne_empirique_fonction(mat_v, mat_h)  # <viha>_D - <viha>_RBM
-    grad_theta = moyenne_empirique(inputs_data)          - moyenne_empirique(mat_v)  # <vi>_D - <vi>_RBM 
-    grad_eta   = moyenne_empirique(proba_h_sachant_data) - moyenne_empirique(mat_h)  # <ha>_D - <ha>_RBM
+    grad_w     = moyenne_empirique_fonction(inputs_data, proba_h_sachant_data) - moyenne_empirique_fonction(mat_v, proba_h_sachant_v)  # <viha>_D - <viha>_RBM
+    grad_theta = moyenne_empirique(inputs_data)          - moyenne_empirique(mat_v)              # <vi>_D - <vi>_RBM 
+    grad_eta   = moyenne_empirique(proba_h_sachant_data) - moyenne_empirique(proba_h_sachant_v)  # <ha>_D - <ha>_RBM
 
     return grad_w, grad_eta, grad_theta
 
@@ -166,27 +203,27 @@ def sample_ber(p):
     return (np.random.rand(*p.shape) < p).astype(int)
 
 
-def bgs(w, eta, theta, Nv, Nh, nstep=10):
+def bgs(w, eta, theta, Ns, Nv, Nh, nstep=10):
     """ Applique l'algorithme Block Gibbs Sampling pour l'echantillonage. """
-    v = np.random.randint(0, 1, size=Nv) # initialisation 
-    h = np.random.randint(0, 1, size=Nh)
+    mat_v = np.random.randint(0, 1, size=(Ns, Nv)) # initialisation 
+    mat_h = np.random.randint(0, 1, size=(Ns, Nh))
 
     for _ in range(nstep):
         # calculer p(h|v)
-        proba_h_sachant_v = sigmoid(eta + v@w)
+        proba_h_sachant_v = sigmoid(eta + mat_v@w)
 
         # sample p(h|v) 
-        h = sample_ber(proba_h_sachant_v) # Taille Nh
+        mat_h = sample_ber(proba_h_sachant_v) # Taille Nh
 
         # calculer p(v|h)
-        proba_v_sachant_h = sigmoid(theta + w@h)  
+        proba_v_sachant_h = sigmoid(theta + mat_h@w.T)  
 
         # sample p(v|h)
-        v = sample_ber(proba_v_sachant_h) # Taille Nv
+        mat_v = sample_ber(proba_v_sachant_h) # Taille Nv
 
-    h = sample_ber(sigmoid(eta + v@w)) # dernier pas sur h 
+    mat_h = sample_ber(sigmoid(eta + mat_v@w)) # dernier pas sur h 
 
-    return h, v
+    return mat_h, mat_v
 
 
 def descente_gradient_rbm(Nv, Nh, Ns, inputs_data, w0, eta0, theta0, mu, epochs):
@@ -199,6 +236,7 @@ def descente_gradient_rbm(Nv, Nh, Ns, inputs_data, w0, eta0, theta0, mu, epochs)
     mat_v = np.zeros((Ns, Nv))
     mat_h = np.zeros((Ns, Nh))
     
+    Ns = mat_v.shape[0]
     w = w0
     eta = eta0
     theta = theta0
@@ -206,11 +244,10 @@ def descente_gradient_rbm(Nv, Nh, Ns, inputs_data, w0, eta0, theta0, mu, epochs)
 
     for i in trange(epochs, desc="Training RBM"):
         # 1ere etape : echantillonage
-        for k in range(Ns):
-            mat_h[k], mat_v[k] = bgs(w, eta, theta, Nv, Nh, 10) # ie. (h, v), a chaque fois nouveau
+        _, mat_v = bgs(w, eta, theta, Ns, Nv, Nh, 10) # ie. (h, v), a chaque fois nouveau
 
         # 2eme etape : calcul gradient 
-        grad_w, grad_eta, grad_theta = calcul_gradients(w, mat_v, mat_h, inputs_data)
+        grad_w, grad_eta, grad_theta = calcul_gradients(w, mat_v, inputs_data)
 
         # 3eme etape : MAJ du gradient
         w = w + mu * grad_w
@@ -247,8 +284,8 @@ if __name__ == "__main__":
     theta = np.zeros(Nv)
     
     # Jeu de données Bars and Stripes: 
-    [dataset] = qml.data.load("other", name="bars-and-stripes") 
-    inputs = dataset.train['4']['inputs'] # images de pixels 4x4 
+    inputs = generate_bars_and_stripes_complete(4)
+
 
     # Dimensions des inputs: (N, D) 
     inputs_np = np.array(inputs)
@@ -256,7 +293,7 @@ if __name__ == "__main__":
     nb_pixels  = inputs_np.shape[1] # D ---> features
 
     # Calcul des biais (eta & theta) et de la matrice des poids (w) 
-    w, eta, theta, llh = descente_gradient_rbm(Nv=Nv, Nh=Nh, Ns=nb_samples, inputs_data=inputs_np, w0=w, eta0=eta, theta0=theta, mu=mu, epochs=1000)
+    w, eta, theta, llh = descente_gradient_rbm(Nv=Nv, Nh=Nh, Ns=nb_samples, inputs_data=inputs_np, w0=w, eta0=eta, theta0=theta, mu=mu, epochs=100)
 
     with h5py.File("rbm_parameters.h5", "w") as f:
         f["weight_matrix"] = w  
