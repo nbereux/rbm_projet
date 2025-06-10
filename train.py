@@ -50,12 +50,11 @@ def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
 
-def all_possible_config_negative(w, theta, eta):
+def all_possible_config_negative(w, theta, eta, combinaisons):
     """ Calcule le log du denominateur de l'expression de la log-vraisemblance
         la somme sur toutes les possibilités de v,h (dans notre cas {0,1})
         renvoie un vecteur de taille Nv + Nh  """
-    Nv, Nh = w.shape
-    combinaisons = np.array(list(product([0, 1], repeat=(Nv + Nh)))) # combinaisons possibles de 0 et 1 dans un tuple de longueur 5 
+    Nv, _ = w.shape
     
     # res = 0 # somme de ttes les config possibles 
     # for vec in combinaisons:
@@ -71,10 +70,11 @@ def all_possible_config_negative(w, theta, eta):
 
     # H prend en entrée une configuration possible
     # on somme donc sur ttes les configurations possibles
-    return [-H(v, h, w, theta, eta) for v, h in zip(parties_v, parties_h)]
+
+    return -H(parties_v, parties_h, w, theta, eta)  
 
 
-def H(v, h, w, theta, eta):
+def H(mat_v, mat_h, w, theta, eta):
     """
     Fonction d'energie du RBM 
         w - matrice de poids visible -> poids cache (Nv x Nh)
@@ -85,16 +85,17 @@ def H(v, h, w, theta, eta):
         h : vec de tt les caches    (taille Nh)
     """
         # res = 0
-    # for i in range(Nv):
-    #     for a in range(Nh):
-    #         res += v[i] * w[i][a] * h[a]
+    # for k in range(Ns):
+        # for i in range(Nv):
+        #     for a in range(Nh):
+        #         res += v[k][i] * w[i][a] * h[k][a]
     # return -(res + v@theta + h@eta)
 
-    return -(np.einsum("i,ia,a->", v, w, h) + v@theta + h@eta) 
+    return -(np.einsum("ki,ia,ka->k", mat_v, w, mat_h) + mat_v@theta + mat_h@eta) 
 
 
 
-def log_likelihood(mat_v, w, theta, eta):
+def log_likelihood(mat_v, w, theta, eta, combinaisons):
     """ Calcule la log-vraisemblance selon la fonction de masse d'une RBM.
         renvoie un vecteur de taille Nh + Nv """
     
@@ -104,19 +105,28 @@ def log_likelihood(mat_v, w, theta, eta):
     # = -log( Z(w, theta, eta) ) - H(v, h, w, theta, eta)
     # = -log ( sum([np.exp(-H(v, h, w, theta, eta)) for all (v, h)] ) - H(v, h, w, theta, eta)
 
-    log_Z = logsumexp(all_possible_config_negative(w, theta, eta))
+    log_Z = logsumexp(all_possible_config_negative(w, theta, eta, combinaisons))
     Ns = mat_v.shape[0]
-    res = 0
-    for k in range(Ns):
-        res += mat_v[k]@theta
-        
-        for a in range(Nh):
-            # mat_v : (Ns, Nv)
-            # w     : (Nv, Nh)
 
-            # mat_v[k] : (Nv,)
-            # w[:, a]  : (Nv,)
-            res += log1p(np.exp(eta[a] + mat_v[k] @ w[:, a]))
+
+    # mat_v : (Ns, Nv)
+    # theta : (Nv,)
+    res = mat_v@theta # -> (Ns,)
+
+    
+    # for a in range(Nh):
+        # mat_v : (Ns, Nv)
+        # w     : (Nv, Nh)
+
+        # eta ; (Nh,)
+        # mat_v @ w : (Ns, Nh)
+
+    res3 = eta + mat_v @ w # -> (Ns, Nh)
+
+
+    res += np.sum(log1p(np.exp(res3)), axis=1) # -> (Ns,)
+
+    res = np.sum(res)
 
     return -log_Z - 1/Ns * res
 
@@ -158,7 +168,7 @@ def moyenne_empirique_fonction(mat_v, mat_h):
     #     matrices_des_k[k] = matrice_k # on va stocker ttes ces matrices k, dans une grosse matrice 
 
     # de dimension (Ns, Nv, Nh)
-    matrices_des_k = mat_v[:, :, None] * mat_h[:, None, :] # 'None', en slicing, cree un axe de longueur 1
+    #######matrices_des_k = mat_v[:, :, None] * mat_h[:, None, :] # 'None', en slicing, cree un axe de longueur 1
 
     # for i in range(Nvec_v):
     #     for a in range(Nvec_h):
@@ -172,7 +182,11 @@ def moyenne_empirique_fonction(mat_v, mat_h):
     
     # return 1/Ns * X # moyenner le tout  
 
-    return np.mean(matrices_des_k, axis=0) # on moyenne sur les Ns samples 
+    ####return np.mean(matrices_des_k, axis=0) # on moyenne sur les Ns samples 
+
+    return (mat_v.T @ mat_h) / mat_v.shape[0]
+
+
     
 
 def calcul_gradients(w, mat_v, inputs_data):
@@ -203,10 +217,11 @@ def sample_ber(p):
     return (np.random.rand(*p.shape) < p).astype(int)
 
 
-def bgs(w, eta, theta, Ns, Nv, Nh, nstep=10):
+def bgs(start_v, w, eta, theta, Ns, Nv, Nh, nstep=10):
     """ Applique l'algorithme Block Gibbs Sampling pour l'echantillonage. """
-    mat_v = np.random.randint(0, 1, size=(Ns, Nv)) # initialisation 
-    mat_h = np.random.randint(0, 1, size=(Ns, Nh))
+    # mat_v = np.random.randint(0, 1, size=(Ns, Nv)) # initialisation 
+    # mat_h = np.random.randint(0, 1, size=(Ns, Nh))
+    mat_v = start_v 
 
     for _ in range(nstep):
         # calculer p(h|v)
@@ -234,17 +249,19 @@ def descente_gradient_rbm(Nv, Nh, Ns, inputs_data, w0, eta0, theta0, mu, epochs)
         Ns : nombre d'échantillons 
     """
     mat_v = np.zeros((Ns, Nv))
-    mat_h = np.zeros((Ns, Nh))
     
     Ns = mat_v.shape[0]
     w = w0
     eta = eta0
     theta = theta0
     llh = np.zeros(epochs)
+    combinaisons = np.array(list(product([0, 1], repeat=(Nv + Nh)))) # combinaisons possibles de 0 et 1 dans un tuple de longueur 5 
+
+    mat_v = np.random.randint(0, 1, size=(Ns, Nv))
 
     for i in trange(epochs, desc="Training RBM"):
         # 1ere etape : echantillonage
-        _, mat_v = bgs(w, eta, theta, Ns, Nv, Nh, 10) # ie. (h, v), a chaque fois nouveau
+        _, mat_v = bgs(mat_v, w, eta, theta, Ns, Nv, Nh, 10) # ie. (h, v), a chaque fois nouveau
 
         # 2eme etape : calcul gradient 
         grad_w, grad_eta, grad_theta = calcul_gradients(w, mat_v, inputs_data)
@@ -254,7 +271,7 @@ def descente_gradient_rbm(Nv, Nh, Ns, inputs_data, w0, eta0, theta0, mu, epochs)
         eta = eta + mu * grad_eta
         theta = theta + mu * grad_theta
 
-        llh[i] = log_likelihood(mat_v, w, theta, eta)
+        llh[i] = log_likelihood(mat_v, w, theta, eta, combinaisons)
 
     return w, eta, theta, llh
 
@@ -275,17 +292,17 @@ if __name__ == "__main__":
         v : vec de tt les visibles  (taille Nv)
         h : vec de tt les caches    (taille Nh)
     """
-    # Initialisation
-    Nv = 16 # nombre de pixels (pour images 4x4)
-    Nh = 3
-    mu = 0.025 
-    w = np.zeros((Nv, Nh))
-    eta = np.zeros(Nh)
-    theta = np.zeros(Nv)
-    
     # Jeu de données Bars and Stripes: 
     inputs = generate_bars_and_stripes_complete(4)
-
+    
+    
+    # Initialisation
+    Nv = 16                # noeuds visibles == nombre de pixels (pour images 4x4)
+    Nh = 7                 # noeuds caches 
+    mu = 0.01              # learning rate 
+    w = np.zeros((Nv, Nh)) # matrice de poids 
+    eta = np.zeros(Nh)     
+    theta = np.log(moyenne_empirique(inputs)) - np.log(1 - moyenne_empirique(inputs))
 
     # Dimensions des inputs: (N, D) 
     inputs_np = np.array(inputs)
