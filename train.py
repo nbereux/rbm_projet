@@ -191,11 +191,13 @@ def moyenne_empirique_fonction(mat_v, mat_h):
 
 def calcul_gradients(w, mat_v, inputs_data):
     """ 
-    Calcule les gradients des parametres w, eta, theta 
+    Calcule les gradients des parametres w, eta, theta, composés respectivement de phase positive et phase négative
+    Note: la phase négative est approximée par l'échantillonnage de Block Gibbs Sampling
+
     
     - params: 
         inputs_data: matrice de données (visibles) : (Ns, Nf)
-        mat_h_sachant_data:  (Ns, Nh)
+        mat_v:  (Ns, Nv) la matrice des échantillons purs RBM de la couche visibles 
 
     - retour : 
         3 vecteurs de gradients
@@ -218,7 +220,14 @@ def sample_ber(p):
 
 
 def bgs(start_v, w, eta, theta, Ns, Nv, Nh, nstep=10):
-    """ Applique l'algorithme Block Gibbs Sampling pour l'echantillonage. """
+    """ 
+    Applique l'algorithme Block Gibbs Sampling pour l'echantillonage du modèle RBM 
+    afin d'approximer la phase négative du gradient.
+        
+    retour: des échantilllons du modèle RBM pur sans dépendances aux données.
+            - couche V et couche H 
+
+     """
     # mat_v = np.random.randint(0, 1, size=(Ns, Nv)) # initialisation 
     # mat_h = np.random.randint(0, 1, size=(Ns, Nh))
     mat_v = start_v 
@@ -243,7 +252,8 @@ def bgs(start_v, w, eta, theta, Ns, Nv, Nh, nstep=10):
 
 def descente_gradient_rbm(Nv, Nh, Ns, inputs_data, w0, eta0, theta0, mu, epochs):
     """
-    Met à jour les gradients des parametres w, eta, theta du modèle RBM 
+    Méthode d'optimisation des paramètres du modèle en cherchant le maximum de la log_likelihood 
+    Met à jour des parametres w, eta, theta du modèle RBM  en utilisatnt le calcul de gradient qui nous indique les directions d'optimisation
     - params : 
         mu : taux d'apprentissage 
         Ns : nombre d'échantillons 
@@ -260,18 +270,18 @@ def descente_gradient_rbm(Nv, Nh, Ns, inputs_data, w0, eta0, theta0, mu, epochs)
     mat_v = np.random.randint(0, 1, size=(Ns, Nv))
 
     for i in trange(epochs, desc="Training RBM"):
-        # 1ere etape : echantillonage
-        _, mat_v = bgs(mat_v, w, eta, theta, Ns, Nv, Nh, 10) # ie. (h, v), a chaque fois nouveau
+        # 1ere etape : echantillonage 
+        _, mat_v = bgs(mat_v, w, eta, theta, Ns, Nv, Nh, 10) # ie. (h, v), a chaque fois nouveau, utilisés pour le calcul de gradient
 
         # 2eme etape : calcul gradient 
         grad_w, grad_eta, grad_theta = calcul_gradients(w, mat_v, inputs_data)
 
-        # 3eme etape : MAJ du gradient
+        # 3eme etape : Mise à Jour des paramètres du modèle 
         w = w + mu * grad_w
         eta = eta + mu * grad_eta
         theta = theta + mu * grad_theta
 
-        llh[i] = log_likelihood(mat_v, w, theta, eta, combinaisons)
+        llh[i] = log_likelihood(mat_v, w, theta, eta, combinaisons) #Les valeurs de la log_likelihood à chaque itération pour suivre son comportement.
 
     return w, eta, theta, llh
 
