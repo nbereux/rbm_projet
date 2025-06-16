@@ -121,7 +121,7 @@ def moyenne_empirique_fonction(mat_v, mat_h):
         mat_v : (Ns, Nvec_v)
         mat_h : (Ns, Nvec_h)
     """
-    return (mat_v.t() @ mat_h) / mat_v.shape[0]
+    return (mat_v.T @ mat_h) / mat_v.shape[0]
 
 
 
@@ -150,10 +150,10 @@ def calcul_gradients(w, mat_v, inputs_data, eta):
 
 
 def sample_ber(p):
-    return (torch.rand_like(p) < p).float()
+    return (torch.rand_like(p) < p).to(dtype=p.dtype) # comparaison entre 2 trucs sur gpu --> resultat sur gpu 
 
 
-def bgs(start_v, w, eta, theta, Ns, Nv, Nh, nstep=10):
+def bgs(start_v, w, eta, theta, nstep=10):
     """ Applique l'algorithme Block Gibbs Sampling pour l'echantillonage. """
     mat_v = start_v 
 
@@ -186,13 +186,12 @@ def descente_gradient_rbm(Nv, Nh, Ns, inputs_data, w0, eta0, theta0, mu, epochs)
     eta = eta0
     theta = theta0
     llh = torch.zeros(epochs)
-    combinaisons = torch.tensor(list(product([0, 1], repeat=(Nv + Nh))), dtype=torch.float32)  # combinaisons possibles de 0 et 1 dans un tuple de longueur 5 
-
-    mat_v = torch.randint(0, 2, (Ns, Nv)).float()
+    combinaisons = torch.tensor(list(product([0, 1], repeat=(Nv + Nh))), dtype=torch.float32, device="cuda")  # combinaisons possibles de 0 et 1 dans un tuple de longueur 5 
+    mat_v = torch.randint(0, 2, (Ns, Nv), dtype=torch.float32, device="cuda")
 
     for i in trange(epochs, desc="Training RBM"):
         # 1ere etape : echantillonage
-        _, mat_v = bgs(mat_v, w, eta, theta, Ns, Nv, Nh, 10)  # ie. (h, v), a chaque fois nouveau
+        _, mat_v = bgs(mat_v, w, eta, theta, 10)  # ie. (h, v), a chaque fois nouveau
 
         # 2eme etape : calcul gradient 
         grad_w, grad_eta, grad_theta = calcul_gradients(w, mat_v, inputs_data, eta)
@@ -223,14 +222,14 @@ if __name__ == "__main__":
         h : vec de tt les caches    (taille Nh)
     """
     # Jeu de données Bars and Stripes: 
-    inputs = torch.tensor(generate_bars_and_stripes_complete(4), dtype=torch.float32)
+    inputs = torch.tensor(generate_bars_and_stripes_complete(4), dtype=torch.float32, device="cuda")
 
     # Initialisation
     Nv = 16        # noeuds visibles == nombre de pixels (pour images 4x4)
     Nh = 7         # noeuds caches 
     mu = 0.01      # learning rate 
-    w = torch.zeros((Nv, Nh)) # matrice de poids 
-    eta = torch.zeros(Nh)      
+    w = torch.zeros((Nv, Nh), dtype=torch.float32, device="cuda") # matrice de poids 
+    eta = torch.zeros(Nh, dtype=torch.float32, device="cuda")      
     theta = torch.log(moyenne_empirique(inputs)) - torch.log(1 - moyenne_empirique(inputs)) # formule d'init. optimale
 
     # Dimensions des inputs: (N, D) 
@@ -238,7 +237,7 @@ if __name__ == "__main__":
     nb_pixels  = inputs.shape[1]  # D ---> features
 
     # Calcul des biais (eta & theta) et de la matrice des poids (w) 
-    w, eta, theta, llh = descente_gradient_rbm(Nv=Nv, Nh=Nh, Ns=nb_samples, inputs_data=inputs, w0=w, eta0=eta, theta0=theta, mu=mu, epochs=100)
+    w, eta, theta, llh = descente_gradient_rbm(Nv=Nv, Nh=Nh, Ns=nb_samples, inputs_data=inputs, w0=w, eta0=eta, theta0=theta, mu=mu, epochs=10000)
 
     # ".cpu" pour ramener le tenseur sur le CPU
     #  afin d'utiliser numpy pour compatibilité h5py
