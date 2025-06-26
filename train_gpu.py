@@ -226,8 +226,8 @@ if __name__ == "__main__":
 
     # Initialisation
     Nv = 16        # noeuds visibles == nombre de pixels (pour images 4x4)
-    Nh = 7         # noeuds caches 
-    mu = 0.01      # learning rate 
+    Nh = 6         # noeuds caches 
+    mu = 0.1      # learning rate 
     w = torch.zeros((Nv, Nh), dtype=torch.float32, device="cuda") # matrice de poids 
     eta = torch.zeros(Nh, dtype=torch.float32, device="cuda")      
     theta = torch.log(moyenne_empirique(inputs)) - torch.log(1 - moyenne_empirique(inputs)) # formule d'init. optimale
@@ -237,7 +237,14 @@ if __name__ == "__main__":
     nb_pixels  = inputs.shape[1]  # D ---> features
 
     # Calcul des biais (eta & theta) et de la matrice des poids (w) 
-    w, eta, theta, llh = descente_gradient_rbm(Nv=Nv, Nh=Nh, Ns=nb_samples, inputs_data=inputs, w0=w, eta0=eta, theta0=theta, mu=mu, epochs=10000)
+    w, eta, theta, llh = descente_gradient_rbm(Nv=Nv, Nh=Nh, Ns=nb_samples, inputs_data=inputs, w0=w, eta0=eta, theta0=theta, mu=mu, epochs=20000)
+
+    # Plusieurs exécutions en variant le nombre des epochs :
+    # Les résultas obtenus seront sauvegardés et discutés ensuite.
+    #               - 5k (Nh = 7) done 
+    #               - 10k (Nh = 7) done 
+    #               - 20k  (Nh = 7) done 
+
 
     # ".cpu" pour ramener le tenseur sur le CPU
     #  afin d'utiliser numpy pour compatibilité h5py
